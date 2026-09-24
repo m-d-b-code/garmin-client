@@ -142,7 +142,12 @@ export class GarminClient<Raw extends boolean = false> {
   }
 
   readonly profile = {
-    get: (): Promise<MaybeRaw<Profile, Raw>> => this.#out(fetchProfile(this.#get)),
+    /** Always a fresh read; also serves the display name to the calls that need it. */
+    get: async (): Promise<MaybeRaw<Profile, Raw>> => {
+      const profile = await fetchProfile(this.#get);
+      this.#displayName ??= Promise.resolve(profile.displayName);
+      return this.#out(Promise.resolve(profile));
+    },
   };
 
   readonly activities = {

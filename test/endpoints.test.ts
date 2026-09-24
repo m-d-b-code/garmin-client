@@ -28,6 +28,18 @@ describe('profile', () => {
     await garminClient.heartRate.day('2026-09-22');
     expect(garmin.callsTo(PROFILE)).toHaveLength(1);
   });
+
+  it('serves the display name after an explicit read', async () => {
+    const garmin = new FakeGarmin().on(
+      'GET',
+      /^\/wellness-service\/wellness\/dailySleepData\//,
+      json(fixture('sleep')),
+    );
+    const garminClient = signedIn(garmin);
+    await garminClient.profile.get();
+    await garminClient.sleep.day('2026-09-22');
+    expect(garmin.callsTo(PROFILE)).toHaveLength(1);
+  });
 });
 
 const MORNING_RUN = {
