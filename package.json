@@ -1,6 +1,6 @@
 {
   "name": "garmin-client",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Node client for Garmin Connect (unofficial API): authentication and reading of health and activity data.",
