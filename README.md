@@ -11,6 +11,15 @@ heart rate, HRV, sleep, steps, body composition, personal records and VO2max.
 > 🚧 **Early days.** Every call has been run against a real account, but Garmin changes things
 > without notice. Expect breaking changes before 1.0.
 
+## Installation
+
+Not published to npm: each [release](https://github.com/m-d-b-code/garmin-client/releases)
+attaches a tarball with the built package.
+
+```sh
+pnpm add https://github.com/m-d-b-code/garmin-client/releases/download/v0.1.0/garmin-client.tgz
+```
+
 ## Design
 
 A library, not a service: no server, no files, no database, no runtime dependency. The
@@ -113,14 +122,6 @@ credentials, tokens or health data.
 | `NotFound`           | Unknown resource (activity id…)                             |
 | `ApiError`           | Any other HTTP error, with `status`                         |
 | `UnexpectedResponse` | Garmin answered in an unknown shape: the protocol changed   |
-
-## Installation
-
-Not published to npm: each release attaches a tarball with the built package.
-
-```sh
-pnpm add https://github.com/m-d-b-code/garmin-client/releases/download/v<version>/garmin-client.tgz
-```
 
 ## Development
 

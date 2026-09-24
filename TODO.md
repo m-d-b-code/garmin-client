@@ -19,6 +19,12 @@ Each of these was read correctly from recorded responses, but not yet seen on a 
 - [ ] ESLint, once `typescript-eslint` supports TypeScript 7.
 - [ ] Activity files (FIT/GPX, track) and Training Status / training load, if a consumer needs
       them.
+- [ ] Range reads, to backfill history in a few calls instead of one per day, if a consumer needs
+      them. Upstream has `/sleep-service/stats/sleep/daily/{from}/{to}` (28 days per request; row
+      shape unknown: record a real response first) and `/userstats-service/wellness/daily`, which
+      takes several `metricId` at once (22 active calories, 23 BMR calories, 60 resting heart
+      rate) over up to a year. No range endpoint exists for the daily summary. Range rows carry
+      fewer fields than the per-day responses, so their `raw` is not the same shape.
 
 ## Known deviations from upstream
 
