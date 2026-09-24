@@ -80,6 +80,24 @@ does not measure is `null`.
 Dates are `YYYY-MM-DD`. Missing values are `null`, never guessed. Units are in the field names
 (`distanceMeters`, `groundContactTimeMs`…); Garmin's grams are converted to kilograms.
 
+### Raw responses
+
+Created with `raw: true`, the client also returns, on every record, the Garmin object it was
+parsed from: the whole response for a single-object call (`daily.summary()`, `sleep.day()`…),
+the item for a list or a range (one activity of `activities.between()`, one day of
+`steps.daily()`…). Useful to archive what Garmin sent, fields this library does not read
+included, and parse it again later.
+
+```ts
+const garmin = new GarminClient({ store, raw: true });
+
+const summary = await garmin.daily.summary('2026-09-24');
+summary.steps; // typed
+summary.raw; // `unknown`: Garmin's JSON, as received
+```
+
+Without the option, `raw` is neither returned nor typed.
+
 ### Errors
 
 Every Garmin failure is a `GarminError` subclass with a stable `code`; messages never contain

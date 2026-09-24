@@ -11,6 +11,7 @@ import {
   record,
   requiredNum,
   str,
+  type WithRaw,
 } from '../parse.js';
 import type { Get } from './get.js';
 
@@ -87,7 +88,11 @@ const PAGE_SIZE = 20;
 const MAX_PAGES = 500;
 export const MAX_LIST_LIMIT = 1000;
 
-export async function listActivities(get: Get, start = 0, limit = 20): Promise<Activity[]> {
+export async function listActivities(
+  get: Get,
+  start = 0,
+  limit = 20,
+): Promise<WithRaw<Activity>[]> {
   if (!Number.isInteger(start) || start < 0) throw new RangeError('start must be an integer >= 0');
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIST_LIMIT) {
     throw new RangeError(`limit must be an integer between 1 and ${MAX_LIST_LIMIT}`);
@@ -97,9 +102,13 @@ export async function listActivities(get: Get, start = 0, limit = 20): Promise<A
 }
 
 /** Every activity started between `from` and `to` (inclusive, local dates), newest first. */
-export async function activitiesBetween(get: Get, from: string, to: string): Promise<Activity[]> {
+export async function activitiesBetween(
+  get: Get,
+  from: string,
+  to: string,
+): Promise<WithRaw<Activity>[]> {
   assertRange(from, to);
-  const all: Activity[] = [];
+  const all: WithRaw<Activity>[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const body = await get('activities', LIST_PATH, {
       startDate: from,
@@ -114,30 +123,34 @@ export async function activitiesBetween(get: Get, from: string, to: string): Pro
   throw new UnexpectedResponse(`activities: more than ${MAX_PAGES} pages, aborting`);
 }
 
-export async function fetchActivity(get: Get, id: number): Promise<Activity> {
+export async function fetchActivity(get: Get, id: number): Promise<WithRaw<Activity>> {
   assertId(id);
   const body = record(await get('activity', `/activity-service/activity/${id}`), 'activity');
-  return parseActivity(body, child(body, 'activityTypeDTO'), child(body, 'summaryDTO'));
+  return {
+    ...parseActivity(body, child(body, 'activityTypeDTO'), child(body, 'summaryDTO')),
+    raw: body,
+  };
 }
 
-export async function fetchExerciseSets(get: Get, id: number): Promise<ExerciseSets> {
+export async function fetchExerciseSets(get: Get, id: number): Promise<WithRaw<ExerciseSets>> {
   assertId(id);
   const body = await get('exercise sets', `/activity-service/activity/${id}/exerciseSets`);
   // Activities without sets (a run) answer 204 or an object with `exerciseSets: null`.
-  if (body === null) return { activityId: id, sets: [] };
+  if (body === null) return { activityId: id, sets: [], raw: null };
   const data = record(body, 'exercise sets');
   const sets = data['exerciseSets'] == null ? [] : array(data['exerciseSets'], 'exerciseSets');
   return {
     activityId: num(data['activityId']) ?? id,
     sets: sets.map((raw) => parseSet(record(raw, 'exercise set'))),
+    raw: body,
   };
 }
 
-function parseList(body: unknown): Activity[] {
+function parseList(body: unknown): WithRaw<Activity>[] {
   if (body === null) return [];
   return array(body, 'activities').map((raw) => {
     const a = record(raw, 'activity');
-    return parseActivity(a, child(a, 'activityType'), a);
+    return { ...parseActivity(a, child(a, 'activityType'), a), raw };
   });
 }
 
@@ -244,7 +257,7 @@ export interface HeartRateZone {
   lowBpm: number | null;
 }
 
-export async function fetchLaps(get: Get, id: number): Promise<Lap[]> {
+export async function fetchLaps(get: Get, id: number): Promise<WithRaw<Lap>[]> {
   assertId(id);
   const body = await get('laps', `/activity-service/activity/${id}/splits`);
   if (body === null) return [];
@@ -266,20 +279,26 @@ export async function fetchLaps(get: Get, id: number): Promise<Lap[]> {
       elevationLossMeters: num(lap['elevationLoss']),
       calories: num(lap['calories']),
       intensity: str(lap['intensityType']),
+      raw,
     };
   });
 }
 
-export async function fetchHeartRateZones(get: Get, id: number): Promise<HeartRateZone[]> {
+export async function fetchHeartRateZones(get: Get, id: number): Promise<WithRaw<HeartRateZone>[]> {
   assertId(id);
   const body = await get('heart rate zones', `/activity-service/activity/${id}/hrTimeInZones`);
   if (body === null) return [];
-  const zones: HeartRateZone[] = [];
+  const zones: WithRaw<HeartRateZone>[] = [];
   for (const raw of array(body, 'heart rate zones')) {
     if (!isRecord(raw)) continue;
     const zone = num(raw['zoneNumber']);
     if (zone === null) continue;
-    zones.push({ zone, seconds: num(raw['secsInZone']) ?? 0, lowBpm: num(raw['zoneLowBoundary']) });
+    zones.push({
+      zone,
+      seconds: num(raw['secsInZone']) ?? 0,
+      lowBpm: num(raw['zoneLowBoundary']),
+      raw,
+    });
   }
   return zones.sort((a, b) => a.zone - b.zone);
 }

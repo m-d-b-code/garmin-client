@@ -5,6 +5,13 @@ import { UnexpectedResponse } from './errors.js';
 
 export type Json = Record<string, unknown>;
 
+/**
+ * A record with the Garmin object it was parsed from: the whole response for a single-object
+ * endpoint, the list item for a list or a range. Parsers always attach it; the client drops it
+ * unless created with `raw: true`.
+ */
+export type WithRaw<T> = T & { raw: unknown };
+
 export function isRecord(value: unknown): value is Json {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

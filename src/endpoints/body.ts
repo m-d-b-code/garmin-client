@@ -1,4 +1,13 @@
-import { array, assertRange, epochToIso, isRecord, num, record, str } from '../parse.js';
+import {
+  array,
+  assertRange,
+  epochToIso,
+  isRecord,
+  num,
+  record,
+  str,
+  type WithRaw,
+} from '../parse.js';
 import type { Get } from './get.js';
 
 export interface BodyComposition {
@@ -24,7 +33,7 @@ export async function fetchBodyComposition(
   get: Get,
   from: string,
   to: string,
-): Promise<BodyComposition[]> {
+): Promise<WithRaw<BodyComposition>[]> {
   assertRange(from, to);
   const body = await get('body composition', '/weight-service/weight/dateRange', {
     startDate: from,
@@ -32,7 +41,7 @@ export async function fetchBodyComposition(
   });
   if (body === null) return [];
   const list = record(body, 'body composition')['dateWeightList'];
-  const entries: BodyComposition[] = [];
+  const entries: WithRaw<BodyComposition>[] = [];
   for (const raw of list == null ? [] : array(list, 'dateWeightList')) {
     if (!isRecord(raw)) continue;
     const date = str(raw['calendarDate']);
@@ -49,6 +58,7 @@ export async function fetchBodyComposition(
       visceralFat: num(raw['visceralFat']),
       metabolicAge: num(raw['metabolicAge']),
       source: str(raw['sourceType']),
+      raw,
     });
   }
   return entries.sort((a, b) => (a.time ?? a.date).localeCompare(b.time ?? b.date));

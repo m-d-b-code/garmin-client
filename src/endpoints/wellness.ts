@@ -13,6 +13,7 @@ import {
   record,
   requiredStr,
   str,
+  type WithRaw,
 } from '../parse.js';
 import type { Get } from './get.js';
 
@@ -108,7 +109,7 @@ export async function fetchDailySummary(
   get: Get,
   displayName: string,
   date: string,
-): Promise<DailySummary> {
+): Promise<WithRaw<DailySummary>> {
   assertDate(date, 'date');
   const s = record(
     await get('daily summary', `/usersummary-service/usersummary/daily/${enc(displayName)}`, {
@@ -140,6 +141,7 @@ export async function fetchDailySummary(
     bodyBatteryLow: num(s['bodyBatteryLowestValue']),
     averageSpo2: num(s['averageSpo2']),
     averageWakingRespiration: num(s['avgWakingRespirationValue']),
+    raw: s,
   };
 }
 
@@ -147,7 +149,7 @@ export async function fetchHeartRateDay(
   get: Get,
   displayName: string,
   date: string,
-): Promise<HeartRateDay> {
+): Promise<WithRaw<HeartRateDay>> {
   assertDate(date, 'date');
   const body = record(
     await get('heart rate', `/wellness-service/wellness/dailyHeartRate/${enc(displayName)}`, {
@@ -168,6 +170,7 @@ export async function fetchHeartRateDay(
     minHeartRate: num(body['minHeartRate']),
     maxHeartRate: num(body['maxHeartRate']),
     samples,
+    raw: body,
   };
 }
 
@@ -177,7 +180,7 @@ export async function fetchRestingHeartRate(
   displayName: string,
   from: string,
   to: string,
-): Promise<RestingHeartRate[]> {
+): Promise<WithRaw<RestingHeartRate>[]> {
   assertRange(from, to);
   const body = record(
     await get('resting heart rate', `/userstats-service/wellness/daily/${enc(displayName)}`, {
@@ -188,19 +191,23 @@ export async function fetchRestingHeartRate(
     'resting heart rate',
   );
   const values = child(child(body, 'allMetrics'), 'metricsMap')['WELLNESS_RESTING_HEART_RATE'];
-  const days: RestingHeartRate[] = [];
+  const days: WithRaw<RestingHeartRate>[] = [];
   for (const entry of Array.isArray(values) ? values : []) {
     if (!isRecord(entry)) continue;
     const date = str(entry['calendarDate']);
     const bpm = num(entry['value']);
-    if (date !== null && bpm !== null) days.push({ date, bpm });
+    if (date !== null && bpm !== null) days.push({ date, bpm, raw: entry });
   }
   return days.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export async function fetchDailySteps(get: Get, from: string, to: string): Promise<DailySteps[]> {
+export async function fetchDailySteps(
+  get: Get,
+  from: string,
+  to: string,
+): Promise<WithRaw<DailySteps>[]> {
   assertRange(from, to);
-  const days: DailySteps[] = [];
+  const days: WithRaw<DailySteps>[] = [];
   for (let start = from; start <= to; start = addDays(start, STEPS_CHUNK_DAYS)) {
     const chunkEnd = addDays(start, STEPS_CHUNK_DAYS - 1);
     const end = chunkEnd < to ? chunkEnd : to;
@@ -213,6 +220,7 @@ export async function fetchDailySteps(get: Get, from: string, to: string): Promi
         steps: num(day['totalSteps']),
         distanceMeters: num(day['totalDistance']),
         goal: num(day['stepGoal']),
+        raw,
       });
     }
   }
@@ -224,7 +232,7 @@ export async function fetchSleep(
   get: Get,
   displayName: string,
   date: string,
-): Promise<SleepNight | null> {
+): Promise<WithRaw<SleepNight> | null> {
   assertDate(date, 'date');
   const body = await get('sleep', `/wellness-service/wellness/dailySleepData/${enc(displayName)}`, {
     date,
@@ -249,11 +257,12 @@ export async function fetchSleep(
     score: num(child(child(dto, 'sleepScores'), 'overall')['value']),
     restingHeartRate: num(data['restingHeartRate']),
     averageRespiration: num(dto['averageRespirationValue']),
+    raw: data,
   };
 }
 
 /** The night filed under `date` with its readings, or `null` when Garmin has no HRV for it. */
-export async function fetchHrvNight(get: Get, date: string): Promise<HrvNight | null> {
+export async function fetchHrvNight(get: Get, date: string): Promise<WithRaw<HrvNight> | null> {
   assertDate(date, 'date');
   const body = await get('hrv', `/hrv-service/hrv/${date}`);
   if (body === null) return null;
@@ -267,13 +276,17 @@ export async function fetchHrvNight(get: Get, date: string): Promise<HrvNight | 
     if (time !== null && ms !== null) readings.push({ time, ms });
   }
   readings.sort((a, b) => a.time.localeCompare(b.time));
-  return { ...parseHrvSummary(data['hrvSummary'], date), readings };
+  return { ...parseHrvSummary(data['hrvSummary'], date), readings, raw: data };
 }
 
 /** Nightly HRV summaries between `from` and `to`, oldest first, without the readings. */
-export async function fetchHrvRange(get: Get, from: string, to: string): Promise<HrvSummary[]> {
+export async function fetchHrvRange(
+  get: Get,
+  from: string,
+  to: string,
+): Promise<WithRaw<HrvSummary>[]> {
   assertRange(from, to);
-  const nights: HrvSummary[] = [];
+  const nights: WithRaw<HrvSummary>[] = [];
   for (let start = from; start <= to; start = addDays(start, HRV_CHUNK_DAYS)) {
     const chunkEnd = addDays(start, HRV_CHUNK_DAYS - 1);
     const end = chunkEnd < to ? chunkEnd : to;
@@ -282,7 +295,7 @@ export async function fetchHrvRange(get: Get, from: string, to: string): Promise
     const list = record(body, 'hrv')['hrvSummaries'];
     for (const raw of list == null ? [] : array(list, 'hrvSummaries')) {
       const date = isRecord(raw) ? str(raw['calendarDate']) : null;
-      if (date !== null) nights.push(parseHrvSummary(raw, date));
+      if (date !== null) nights.push({ ...parseHrvSummary(raw, date), raw });
     }
   }
   return nights.sort((a, b) => a.date.localeCompare(b.date));

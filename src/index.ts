@@ -1,7 +1,13 @@
 // Public surface of the library. Everything a consumer may import is re-exported here;
 // deep imports into `dist/` are not supported.
 
-export { GarminClient, type GarminClientOptions, type LoginResult } from './client.js';
+export {
+  GarminClient,
+  type GarminClientOptions,
+  type LoginResult,
+  type MaybeRaw,
+} from './client.js';
+export type { WithRaw } from './parse.js';
 export type { RetryOptions } from './api.js';
 export type {
   Activity,

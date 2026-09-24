@@ -39,10 +39,11 @@ import {
   type SleepNight,
 } from './endpoints/wellness.js';
 import { type Fetch, sleep } from './http.js';
+import { isRecord, type WithRaw } from './parse.js';
 import { Session } from './session.js';
 import type { GarminTokens, TokenStore } from './tokens.js';
 
-export interface GarminClientOptions {
+export interface GarminClientOptions<Raw extends boolean = false> {
   /** Where the session lives. Receives every new token pair (login, refresh, import). */
   store: TokenStore;
   /** Defaults to the global `fetch`. Tests inject recorded responses here. */
@@ -51,6 +52,12 @@ export interface GarminClientOptions {
   timeoutMs?: number;
   /** Backoff on 429 and 5xx for data calls; login and refresh are never retried. */
   retry?: Partial<RetryOptions>;
+  /**
+   * Keep, on every returned record, the Garmin object it was parsed from as `raw`: the whole
+   * response for a single-object call, the item for a list or a range. For consumers that archive
+   * what Garmin sent, including the fields this library does not read. Default `false`.
+   */
+  raw?: Raw;
   /** Clock, for tests of the refresh margin. */
   now?: () => number;
   /** Delay between retries, for tests. */
@@ -66,15 +73,19 @@ export type LoginResult =
    */
   | { status: 'needs_mfa'; state: string };
 
-export class GarminClient {
+/** `T`, with `raw` when the client was created with `raw: true`. */
+export type MaybeRaw<T, Raw extends boolean> = Raw extends true ? WithRaw<T> : T;
+
+export class GarminClient<Raw extends boolean = false> {
   readonly #auth: AuthContext;
   readonly #api: ApiContext;
   readonly #session: Session;
   readonly #get: Get;
+  readonly #raw: boolean;
   #pendingMfa: string | null = null;
   #displayName: Promise<string> | null = null;
 
-  constructor(options: GarminClientOptions) {
+  constructor(options: GarminClientOptions<Raw>) {
     const fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.#auth = { fetch, timeoutMs };
@@ -86,6 +97,7 @@ export class GarminClient {
     };
     this.#session = new Session(options.store, this.#auth, options.now ?? Date.now);
     this.#get = (label, path, query) => apiGet(this.#api, this.#session, label, path, query);
+    this.#raw = options.raw ?? false;
   }
 
   /**
@@ -130,68 +142,80 @@ export class GarminClient {
   }
 
   readonly profile = {
-    get: (): Promise<Profile> => fetchProfile(this.#get),
+    get: (): Promise<MaybeRaw<Profile, Raw>> => this.#out(fetchProfile(this.#get)),
   };
 
   readonly activities = {
     /** Most recent first; `start` is an offset (0 = latest activity). */
-    list: (options: { start?: number; limit?: number } = {}): Promise<Activity[]> =>
-      listActivities(this.#get, options.start, options.limit),
-    between: (from: string, to: string): Promise<Activity[]> =>
-      activitiesBetween(this.#get, from, to),
-    get: (id: number): Promise<Activity> => fetchActivity(this.#get, id),
-    exerciseSets: (id: number): Promise<ExerciseSets> => fetchExerciseSets(this.#get, id),
+    list: (options: { start?: number; limit?: number } = {}): Promise<MaybeRaw<Activity, Raw>[]> =>
+      this.#out(listActivities(this.#get, options.start, options.limit)),
+    between: (from: string, to: string): Promise<MaybeRaw<Activity, Raw>[]> =>
+      this.#out(activitiesBetween(this.#get, from, to)),
+    get: (id: number): Promise<MaybeRaw<Activity, Raw>> => this.#out(fetchActivity(this.#get, id)),
+    exerciseSets: (id: number): Promise<MaybeRaw<ExerciseSets, Raw>> =>
+      this.#out(fetchExerciseSets(this.#get, id)),
     /** Laps as recorded by the watch: per kilometre with auto lap, or per button press. */
-    laps: (id: number): Promise<Lap[]> => fetchLaps(this.#get, id),
-    heartRateZones: (id: number): Promise<HeartRateZone[]> => fetchHeartRateZones(this.#get, id),
+    laps: (id: number): Promise<MaybeRaw<Lap, Raw>[]> => this.#out(fetchLaps(this.#get, id)),
+    heartRateZones: (id: number): Promise<MaybeRaw<HeartRateZone, Raw>[]> =>
+      this.#out(fetchHeartRateZones(this.#get, id)),
   };
 
   readonly daily = {
-    summary: async (date: string): Promise<DailySummary> =>
-      fetchDailySummary(this.#get, await this.#name(), date),
+    summary: async (date: string): Promise<MaybeRaw<DailySummary, Raw>> =>
+      this.#out(fetchDailySummary(this.#get, await this.#name(), date)),
   };
 
   readonly heartRate = {
-    day: async (date: string): Promise<HeartRateDay> =>
-      fetchHeartRateDay(this.#get, await this.#name(), date),
-    resting: async (from: string, to: string = from): Promise<RestingHeartRate[]> =>
-      fetchRestingHeartRate(this.#get, await this.#name(), from, to),
+    day: async (date: string): Promise<MaybeRaw<HeartRateDay, Raw>> =>
+      this.#out(fetchHeartRateDay(this.#get, await this.#name(), date)),
+    resting: async (from: string, to: string = from): Promise<MaybeRaw<RestingHeartRate, Raw>[]> =>
+      this.#out(fetchRestingHeartRate(this.#get, await this.#name(), from, to)),
   };
 
   readonly steps = {
-    daily: (from: string, to: string = from): Promise<DailySteps[]> =>
-      fetchDailySteps(this.#get, from, to),
+    daily: (from: string, to: string = from): Promise<MaybeRaw<DailySteps, Raw>[]> =>
+      this.#out(fetchDailySteps(this.#get, from, to)),
   };
 
   readonly sleep = {
-    day: async (date: string): Promise<SleepNight | null> =>
-      fetchSleep(this.#get, await this.#name(), date),
+    day: async (date: string): Promise<MaybeRaw<SleepNight, Raw> | null> =>
+      this.#out(fetchSleep(this.#get, await this.#name(), date)),
   };
 
   readonly hrv = {
-    day: (date: string): Promise<HrvNight | null> => fetchHrvNight(this.#get, date),
-    between: (from: string, to: string = from): Promise<HrvSummary[]> =>
-      fetchHrvRange(this.#get, from, to),
+    day: (date: string): Promise<MaybeRaw<HrvNight, Raw> | null> =>
+      this.#out(fetchHrvNight(this.#get, date)),
+    between: (from: string, to: string = from): Promise<MaybeRaw<HrvSummary, Raw>[]> =>
+      this.#out(fetchHrvRange(this.#get, from, to)),
   };
 
   readonly body = {
-    composition: (from: string, to: string = from): Promise<BodyComposition[]> =>
-      fetchBodyComposition(this.#get, from, to),
+    composition: (from: string, to: string = from): Promise<MaybeRaw<BodyComposition, Raw>[]> =>
+      this.#out(fetchBodyComposition(this.#get, from, to)),
   };
 
   readonly records = {
-    list: async (): Promise<PersonalRecord[]> =>
-      fetchPersonalRecords(this.#get, await this.#name()),
+    list: async (): Promise<MaybeRaw<PersonalRecord, Raw>[]> =>
+      this.#out(fetchPersonalRecords(this.#get, await this.#name())),
   };
 
   readonly vo2max = {
-    between: (from: string, to: string = from): Promise<Vo2Max[]> =>
-      fetchVo2Max(this.#get, from, to),
+    between: (from: string, to: string = from): Promise<MaybeRaw<Vo2Max, Raw>[]> =>
+      this.#out(fetchVo2Max(this.#get, from, to)),
   };
 
   async #start(tokens: GarminTokens): Promise<void> {
     this.#displayName = null;
     await this.#session.set(tokens);
+  }
+
+  /**
+   * Parsers always attach `raw`; it is dropped here unless the client keeps it. The one unchecked
+   * cast of the client: each method's declared type stands for what its parser returns.
+   */
+  async #out<T>(result: Promise<T>): Promise<never> {
+    const value = await result;
+    return (this.#raw ? value : dropRaw(value)) as never;
   }
 
   /** The display name, fetched once per session: several URLs need it. */
@@ -205,4 +229,11 @@ export class GarminClient {
     );
     return this.#displayName;
   }
+}
+
+function dropRaw(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(dropRaw);
+  if (!isRecord(value) || !('raw' in value)) return value;
+  const { raw: _, ...rest } = value;
+  return rest;
 }

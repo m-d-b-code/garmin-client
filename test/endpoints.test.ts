@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ApiError, memoryTokenStore, NotFound } from '../src/index.js';
-import { client, FakeGarmin, fixture, json, PROFILE, status, tokens } from './helpers.js';
+import { ApiError, GarminClient, memoryTokenStore, NotFound } from '../src/index.js';
+import { client, FakeGarmin, fixture, json, NOW, PROFILE, status, tokens } from './helpers.js';
 
 const DISPLAY_NAME = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789';
 
@@ -426,6 +426,56 @@ describe('performance', () => {
       { date: '2026-09-14', running: 48, cycling: null },
       { date: '2026-09-21', running: 48.7, cycling: null },
     ]);
+  });
+});
+
+describe('raw responses', () => {
+  function rawClient(garmin: FakeGarmin) {
+    garmin.on('GET', PROFILE, json(fixture('social-profile')));
+    return new GarminClient({
+      store: memoryTokenStore(tokens()),
+      fetch: garmin.fetch,
+      now: () => NOW,
+      raw: true,
+    });
+  }
+
+  it('keeps the whole response of a single-object call', async () => {
+    const garmin = new FakeGarmin().on(
+      'GET',
+      `/usersummary-service/usersummary/daily/${DISPLAY_NAME}`,
+      json(fixture('daily-summary')),
+    );
+    const summary = await rawClient(garmin).daily.summary('2026-09-22');
+    expect(summary.steps).toBe(11234);
+    expect(summary.raw).toEqual(fixture('daily-summary'));
+  });
+
+  it('keeps each list item as its own raw', async () => {
+    const garmin = new FakeGarmin().on(
+      'GET',
+      '/activitylist-service/activities/search/activities',
+      json(fixture('activities')),
+    );
+    const activities = await rawClient(garmin).activities.between('2026-09-01', '2026-09-24');
+    expect(activities.map((a) => a.raw)).toEqual(fixture('activities'));
+  });
+
+  it('still returns null when there is nothing to parse', async () => {
+    const garmin = new FakeGarmin().on('GET', /dailySleepData/, json(fixture('sleep-empty')));
+    expect(await rawClient(garmin).sleep.day('2026-09-23')).toBeNull();
+  });
+
+  it('is left out by default', async () => {
+    const garmin = new FakeGarmin().on(
+      'GET',
+      '/activitylist-service/activities/search/activities',
+      json(fixture('activities')),
+    );
+    const [activity] = await signedIn(garmin).activities.list();
+    expect(activity).not.toHaveProperty('raw');
+    // @ts-expect-error `raw` is only typed on a client created with `raw: true`.
+    void activity?.raw;
   });
 });
 

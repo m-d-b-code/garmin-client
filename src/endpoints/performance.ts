@@ -1,6 +1,16 @@
 // Fitness markers Garmin computes across activities: personal records and VO2max.
 
-import { array, assertRange, child, epochToIso, isRecord, type Json, num, str } from '../parse.js';
+import {
+  array,
+  assertRange,
+  child,
+  epochToIso,
+  isRecord,
+  type Json,
+  num,
+  str,
+  type WithRaw,
+} from '../parse.js';
 import type { Get } from './get.js';
 
 // Garmin's `typeId`, mapped by other clients; unknown ids are kept with `kind: null`.
@@ -60,13 +70,13 @@ export interface Vo2Max {
 export async function fetchPersonalRecords(
   get: Get,
   displayName: string,
-): Promise<PersonalRecord[]> {
+): Promise<WithRaw<PersonalRecord>[]> {
   const body = await get(
     'personal records',
     `/personalrecord-service/personalrecord/prs/${encodeURIComponent(displayName)}`,
   );
   if (body === null) return [];
-  const records: PersonalRecord[] = [];
+  const records: WithRaw<PersonalRecord>[] = [];
   for (const raw of array(body, 'personal records')) {
     if (!isRecord(raw)) continue;
     const typeId = num(raw['typeId']);
@@ -80,17 +90,18 @@ export async function fetchPersonalRecords(
       activityId: num(raw['activityId']) || null,
       activityType: str(raw['activityType']),
       achievedAt: epochToIso(raw['prStartTimeGmt']),
+      raw,
     });
   }
   return records.sort((a, b) => a.typeId - b.typeId);
 }
 
 /** VO2max on the days Garmin updated it, oldest first. */
-export async function fetchVo2Max(get: Get, from: string, to: string): Promise<Vo2Max[]> {
+export async function fetchVo2Max(get: Get, from: string, to: string): Promise<WithRaw<Vo2Max>[]> {
   assertRange(from, to);
   const body = await get('vo2max', `/metrics-service/metrics/maxmet/daily/${from}/${to}`);
   if (body === null) return [];
-  const days: Vo2Max[] = [];
+  const days: WithRaw<Vo2Max>[] = [];
   for (const raw of array(body, 'vo2max')) {
     if (!isRecord(raw)) continue;
     const generic = child(raw, 'generic');
@@ -99,7 +110,7 @@ export async function fetchVo2Max(get: Get, from: string, to: string): Promise<V
     const running = precise(generic);
     const bike = precise(cycling);
     if (date === null || (running === null && bike === null)) continue;
-    days.push({ date, running, cycling: bike });
+    days.push({ date, running, cycling: bike, raw });
   }
   return days.sort((a, b) => a.date.localeCompare(b.date));
 }
