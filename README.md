@@ -17,7 +17,7 @@ Not published to npm: each [release](https://github.com/m-d-b-code/garmin-client
 attaches a tarball with the built package.
 
 ```sh
-pnpm add https://github.com/m-d-b-code/garmin-client/releases/download/v0.1.0/garmin-client.tgz
+pnpm add https://github.com/m-d-b-code/garmin-client/releases/download/v0.2.0/garmin-client.tgz
 ```
 
 ## Design
