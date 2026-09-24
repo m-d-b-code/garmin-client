@@ -1,0 +1,13 @@
+{
+  // `tsconfig.json` only covers `src` and produces `dist`.
+  // This one adds tests, scripts and the Vitest config to the typecheck, without emitting.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"],
+    // Scripts import the package by name, like a consumer; at runtime that resolves to `dist`.
+    "paths": { "garmin-client": ["./src/index.ts"] }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"]
+}

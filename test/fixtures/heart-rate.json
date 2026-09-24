@@ -1,0 +1,14 @@
+{
+  "userProfilePK": 22222222,
+  "calendarDate": "2026-09-22",
+  "startTimestampGMT": "2026-09-21T22:00:00.0",
+  "maxHeartRate": 171,
+  "minHeartRate": 48,
+  "restingHeartRate": 52,
+  "lastSevenDaysAvgRestingHeartRate": 53,
+  "heartRateValues": [
+    [1790028000000, 55],
+    [1790028120000, null],
+    [1790028240000, 58]
+  ]
+}

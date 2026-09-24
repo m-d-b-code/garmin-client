@@ -1,0 +1,49 @@
+{
+  "activityId": 30000000002,
+  "exerciseSets": [
+    {
+      "exercises": [
+        { "probability": 97.1, "category": "PULL_UP", "name": "PULL_UP" },
+        { "probability": 97.1, "category": "PULL_UP", "name": "PULL_UP" }
+      ],
+      "duration": 35.0,
+      "repetitionCount": 8,
+      "weight": 0.0,
+      "setType": "ACTIVE",
+      "startTime": "2026-09-22T16:32:00.0",
+      "wktStepIndex": 0,
+      "messageIndex": 0
+    },
+    {
+      "exercises": [],
+      "duration": 90.0,
+      "repetitionCount": null,
+      "weight": null,
+      "setType": "REST",
+      "startTime": "2026-09-22T16:32:35.0",
+      "messageIndex": 1
+    },
+    {
+      "exercises": [
+        { "probability": 88.0, "category": "BENCH_PRESS", "name": "BARBELL_BENCH_PRESS" },
+        { "probability": 88.0, "category": "BENCH_PRESS", "name": "BARBELL_BENCH_PRESS" },
+        { "probability": 70.0, "category": "ROW", "name": "DUMBBELL_ROW" }
+      ],
+      "duration": 48.0,
+      "repetitionCount": 10,
+      "weight": 60000.0,
+      "setType": "ACTIVE",
+      "startTime": "2026-09-22T16:34:05.0",
+      "messageIndex": 2
+    },
+    {
+      "exercises": [{ "probability": 100.0, "category": "CARDIO", "name": null }],
+      "duration": 60.0,
+      "repetitionCount": null,
+      "weight": null,
+      "setType": "ACTIVE",
+      "startTime": "2026-09-22T16:36:00.0",
+      "messageIndex": 3
+    }
+  ]
+}

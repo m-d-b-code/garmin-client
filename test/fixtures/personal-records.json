@@ -1,0 +1,32 @@
+[
+  {
+    "id": 900000003,
+    "typeId": 3,
+    "status": "ACCEPTED",
+    "activityId": 30000000001,
+    "activityName": "Morning Run",
+    "activityType": "running",
+    "activityStartDateTimeInGMT": 1790053512000,
+    "value": 1498.2,
+    "prStartTimeGmt": 1790053800000,
+    "prStartTimeLocal": null
+  },
+  {
+    "id": 900000012,
+    "typeId": 12,
+    "status": "ACCEPTED",
+    "activityId": 0,
+    "activityType": null,
+    "value": 23456.0,
+    "prStartTimeGmt": 1789000000000
+  },
+  {
+    "id": 900000099,
+    "typeId": 99,
+    "status": "ACCEPTED",
+    "activityId": null,
+    "activityType": null,
+    "value": 7.0,
+    "prStartTimeGmt": null
+  }
+]

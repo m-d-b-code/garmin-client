@@ -1,0 +1,19 @@
+{
+  "dailySleepDTO": {
+    "id": 1790000000000,
+    "userProfilePK": 22222222,
+    "calendarDate": "2026-09-22",
+    "sleepTimeSeconds": 27000,
+    "napTimeSeconds": 0,
+    "sleepStartTimestampGMT": 1790026800000,
+    "sleepEndTimestampGMT": 1790055600000,
+    "deepSleepSeconds": 5400,
+    "lightSleepSeconds": 14400,
+    "remSleepSeconds": 7200,
+    "awakeSleepSeconds": 900,
+    "averageRespirationValue": 13.5,
+    "sleepScores": { "overall": { "value": 82, "qualifierKey": "GOOD" } }
+  },
+  "restingHeartRate": 52,
+  "avgOvernightHrv": 61.0
+}
