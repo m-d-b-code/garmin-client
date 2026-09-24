@@ -48,7 +48,10 @@ export function fromPythonTokens(input: string | object): GarminTokens {
   return { diToken, diRefreshToken, diClientId };
 }
 
-/** A `TokenStore` kept in memory only: for scripts and tests. */
+/**
+ * A `TokenStore` kept in memory only: for scripts and tests, or to hold a new session until the
+ * consumer has checked the account (`profile.get()`) and read the tokens back with `load()`.
+ */
 export function memoryTokenStore(initial: GarminTokens | null = null): TokenStore {
   let tokens = initial;
   return {

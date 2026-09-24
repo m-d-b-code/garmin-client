@@ -60,6 +60,22 @@ import { fromPythonTokens } from 'garmin-client';
 await garmin.importSession(fromPythonTokens(readFileSync('garmin_tokens.json', 'utf8')));
 ```
 
+To check which Garmin account signed in before keeping its session (for instance, to refuse
+linking the same account twice), sign in against a `memoryTokenStore()` and persist the tokens
+once the account is accepted:
+
+```ts
+import { memoryTokenStore } from 'garmin-client';
+
+const pending = memoryTokenStore();
+const garmin = new GarminClient({ store: pending });
+await garmin.resumeLogin(code, state); // or login()
+
+const { profileId } = await garmin.profile.get(); // stable account id
+// …reject if `profileId` is already linked, otherwise:
+await persist(profileId, await pending.load());
+```
+
 ### Data
 
 | Call                                | Returns                                            |
