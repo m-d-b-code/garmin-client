@@ -12,7 +12,9 @@ import {
   IOS_SSO_CLIENT_ID,
   MOBILE_LOGIN_PATH,
   MOBILE_MFA_VERIFY_PATH,
+  MOBILE_SIGN_IN_PATH,
   NATIVE_HEADERS,
+  SIGN_IN_DELAY_MS,
   SSO_ORIGIN,
 } from './constants.js';
 import {
@@ -38,6 +40,7 @@ import type { GarminTokens } from './tokens.js';
 export interface AuthContext {
   fetch: Fetch;
   timeoutMs: number;
+  sleep: (ms: number) => Promise<void>;
 }
 
 export type LoginStep =
@@ -56,17 +59,30 @@ const SSO_QUERY = new URLSearchParams({
   service: IOS_SERVICE_URL,
 }).toString();
 
+const SIGN_IN_QUERY = new URLSearchParams({
+  clientId: IOS_SSO_CLIENT_ID,
+  service: IOS_SERVICE_URL,
+}).toString();
+
+const SIGN_IN_URL = `${SSO_ORIGIN}${MOBILE_SIGN_IN_PATH}?${SIGN_IN_QUERY}`;
+
 const SSO_HEADERS = {
   'User-Agent': IOS_LOGIN_USER_AGENT,
   Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
   'Content-Type': 'application/json',
   Origin: SSO_ORIGIN,
+  Referer: SIGN_IN_URL,
 };
 
 export async function login(ctx: AuthContext, email: string, password: string): Promise<LoginStep> {
+  const cookies = await loadSignInPage(ctx);
+  const { min, max } = SIGN_IN_DELAY_MS;
+  await ctx.sleep(min + Math.random() * (max - min));
+
   const res = await ctx.fetch(`${SSO_ORIGIN}${MOBILE_LOGIN_PATH}?${SSO_QUERY}`, {
     method: 'POST',
-    headers: SSO_HEADERS,
+    headers: { ...SSO_HEADERS, Cookie: cookies },
     body: JSON.stringify({ username: email, password, rememberMe: true, captchaToken: '' }),
     signal: AbortSignal.timeout(ctx.timeoutMs),
   });
@@ -79,7 +95,7 @@ export async function login(ctx: AuthContext, email: string, password: string): 
     case 'MFA_REQUIRED': {
       const state: MfaState = {
         v: 1,
-        cookies: cookieHeader(res),
+        cookies: cookieHeader(res, cookies),
         mfaMethod: mfaMethod(body),
       };
       return { status: 'needs_mfa', state: encodeState(state) };
@@ -93,6 +109,25 @@ export async function login(ctx: AuthContext, email: string, password: string): 
         `Login: unexpected response (HTTP ${res.status}, status ${status ?? 'missing'})`,
       );
   }
+}
+
+/** Sets the SSO session and Cloudflare cookies; a block here stops before any credential is sent. */
+async function loadSignInPage(ctx: AuthContext): Promise<string> {
+  const res = await ctx.fetch(SIGN_IN_URL, {
+    headers: {
+      'User-Agent': IOS_LOGIN_USER_AGENT,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    signal: AbortSignal.timeout(ctx.timeoutMs),
+  });
+  await res.body?.cancel();
+  if (BLOCKED_STATUSES.has(res.status)) {
+    throw new RateLimited('Sign-in page rate limited by Garmin', retryAfterSeconds(res));
+  }
+  if (res.status === 403) throw new BotChallenge('Sign-in page: HTTP 403 (bot challenge)');
+  if (!res.ok) throw new UnexpectedResponse(`Sign-in page: HTTP ${res.status}`);
+  return cookieHeader(res);
 }
 
 export async function verifyMfa(
@@ -205,9 +240,12 @@ function parseTokenResponse(
   };
 }
 
+// The SSO also blocks with the non-standard 427 (upstream afc4f8c).
+const BLOCKED_STATUSES: ReadonlySet<number> = new Set([427, 429]);
+
 /** Shared handling of SSO answers: throttling and bot challenges look the same on every call. */
 async function ssoJson(res: Response, step: string): Promise<Record<string, unknown>> {
-  if (res.status === 429) {
+  if (BLOCKED_STATUSES.has(res.status)) {
     throw new RateLimited(`${step} rate limited by Garmin`, retryAfterSeconds(res));
   }
   if (res.status === 403) throw new BotChallenge(`${step}: HTTP 403 (bot challenge)`);

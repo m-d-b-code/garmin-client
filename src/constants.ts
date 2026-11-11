@@ -12,6 +12,9 @@ export const IOS_LOGIN_USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) ' +
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
 
+// The app's web view loads this page first: a credential POST without its cookies and Referer
+// gets 429 even from an IP that is not rate limited (upstream c635074, October 2026).
+export const MOBILE_SIGN_IN_PATH = '/mobile/sso/en_US/sign-in';
 export const MOBILE_LOGIN_PATH = '/mobile/api/login';
 export const MOBILE_MFA_VERIFY_PATH = '/mobile/api/mfa/verifyCode';
 
@@ -44,3 +47,6 @@ export const NATIVE_HEADERS: Readonly<Record<string, string>> = {
 export const REFRESH_MARGIN_MS = 15 * 60 * 1000;
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** Pause between loading the sign-in page and posting the credentials, as a person would. */
+export const SIGN_IN_DELAY_MS = { min: 2_000, max: 5_000 } as const;

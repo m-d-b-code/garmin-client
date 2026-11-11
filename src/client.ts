@@ -60,7 +60,7 @@ export interface GarminClientOptions<Raw extends boolean = false> {
   raw?: Raw;
   /** Clock, for tests of the refresh margin. */
   now?: () => number;
-  /** Delay between retries, for tests. */
+  /** Delay between retries and before posting the credentials, for tests. */
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -88,12 +88,12 @@ export class GarminClient<Raw extends boolean = false> {
   constructor(options: GarminClientOptions<Raw>) {
     const fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.#auth = { fetch, timeoutMs };
+    this.#auth = { fetch, timeoutMs, sleep: options.sleep ?? sleep };
     this.#api = {
       fetch,
       timeoutMs,
       retry: { retries: 2, baseDelayMs: 1000, maxDelayMs: 30_000, ...options.retry },
-      sleep: options.sleep ?? sleep,
+      sleep: this.#auth.sleep,
     };
     this.#session = new Session(options.store, this.#auth, options.now ?? Date.now);
     this.#get = (label, path, query) => apiGet(this.#api, this.#session, label, path, query);

@@ -19,6 +19,8 @@ import {
   NOW,
   SSO_LOGIN,
   SSO_MFA,
+  SSO_SIGN_IN,
+  signedInGarmin,
   status,
 } from './helpers.js';
 
@@ -37,7 +39,7 @@ const tokenResponse = () =>
 
 describe('login', () => {
   it('exchanges the service ticket and saves the tokens', async () => {
-    const garmin = new FakeGarmin()
+    const garmin = signedInGarmin()
       .on('POST', SSO_LOGIN, successfulLogin())
       // The first client ID is retired: the next one is tried.
       .on('POST', DI_TOKEN, json({ error: 'invalid_client' }, { status: 400 }), tokenResponse());
@@ -70,15 +72,45 @@ describe('login', () => {
   });
 
   it('fails with UnexpectedResponse when no client ID is accepted', async () => {
-    const garmin = new FakeGarmin()
+    const garmin = signedInGarmin()
       .on('POST', SSO_LOGIN, successfulLogin())
       .on('POST', DI_TOKEN, json({ error: 'invalid_client' }, { status: 400 }));
     await expect(client(garmin).login(CREDENTIALS)).rejects.toBeInstanceOf(UnexpectedResponse);
     expect(garmin.callsTo(DI_TOKEN)).toHaveLength(4);
   });
 
+  it('loads the sign-in page before posting, with its cookies and Referer', async () => {
+    const garmin = signedInGarmin()
+      .on('POST', SSO_LOGIN, successfulLogin())
+      .on('POST', DI_TOKEN, tokenResponse());
+    await client(garmin).login(CREDENTIALS);
+
+    expect(garmin.calls.map((c) => `${c.method} ${c.url.pathname}`).slice(0, 2)).toEqual([
+      `GET ${SSO_SIGN_IN}`,
+      `POST ${SSO_LOGIN}`,
+    ]);
+    const [page] = garmin.callsTo(SSO_SIGN_IN);
+    expect(page?.url.searchParams.get('clientId')).toBe('GCM_IOS_DARK');
+    const [post] = garmin.callsTo(SSO_LOGIN);
+    expect(post?.headers.get('cookie')).toBe('SESSION=page; __cf_bm=cf');
+    expect(post?.headers.get('referer')).toBe(page?.url.href);
+  });
+
+  it.each([
+    ['HTTP 429', () => status(429), RateLimited],
+    ['HTTP 427', () => status(427), RateLimited],
+    ['HTTP 403', () => html(403), BotChallenge],
+  ])(
+    'stops before sending the credentials when the sign-in page answers %s',
+    async (_, reply, type) => {
+      const garmin = new FakeGarmin().on('GET', SSO_SIGN_IN, reply());
+      await expect(client(garmin).login(CREDENTIALS)).rejects.toBeInstanceOf(type);
+      expect(garmin.callsTo(SSO_LOGIN)).toHaveLength(0);
+    },
+  );
+
   it('rejects wrong credentials', async () => {
-    const garmin = new FakeGarmin().on(
+    const garmin = signedInGarmin().on(
       'POST',
       SSO_LOGIN,
       json({ responseStatus: { type: 'INVALID_USERNAME_PASSWORD' } }, { status: 401 }),
@@ -91,12 +123,12 @@ describe('login', () => {
     ['an HTML page', () => html(200)],
     ['a CAPTCHA', () => json({ responseStatus: { type: 'CAPTCHA_REQUIRED' } })],
   ])('reports %s as a bot challenge', async (_, reply) => {
-    const garmin = new FakeGarmin().on('POST', SSO_LOGIN, reply());
+    const garmin = signedInGarmin().on('POST', SSO_LOGIN, reply());
     await expect(client(garmin).login(CREDENTIALS)).rejects.toBeInstanceOf(BotChallenge);
   });
 
   it('reports HTTP 429 with its Retry-After', async () => {
-    const garmin = new FakeGarmin().on('POST', SSO_LOGIN, status(429, { 'retry-after': '120' }));
+    const garmin = signedInGarmin().on('POST', SSO_LOGIN, status(429, { 'retry-after': '120' }));
     const error = await client(garmin)
       .login(CREDENTIALS)
       .catch((e: unknown) => e);
@@ -104,8 +136,13 @@ describe('login', () => {
     expect((error as RateLimited).retryAfter).toBe(120);
   });
 
+  it('reports the non-standard HTTP 427 as a rate limit', async () => {
+    const garmin = signedInGarmin().on('POST', SSO_LOGIN, status(427));
+    await expect(client(garmin).login(CREDENTIALS)).rejects.toBeInstanceOf(RateLimited);
+  });
+
   it('reports a 429 buried in a JSON body', async () => {
-    const garmin = new FakeGarmin().on(
+    const garmin = signedInGarmin().on(
       'POST',
       SSO_LOGIN,
       json({ error: { 'status-code': '429' } }),
@@ -120,7 +157,7 @@ describe('login', () => {
       () => html(403),
     ];
     for (const reply of replies) {
-      const garmin = new FakeGarmin().on('POST', SSO_LOGIN, reply());
+      const garmin = signedInGarmin().on('POST', SSO_LOGIN, reply());
       const error = (await client(garmin)
         .login(CREDENTIALS)
         .catch((e: unknown) => e)) as Error;
@@ -142,7 +179,7 @@ describe('MFA', () => {
     );
 
   it('returns needs_mfa, then finishes with the code', async () => {
-    const garmin = new FakeGarmin()
+    const garmin = signedInGarmin()
       .on('POST', SSO_LOGIN, mfaRequired())
       .on('POST', SSO_MFA, successfulLogin())
       .on('POST', DI_TOKEN, tokenResponse());
@@ -156,7 +193,7 @@ describe('MFA', () => {
     await garminClient.resumeLogin(' 123456 ');
 
     const [verify] = garmin.callsTo(SSO_MFA);
-    expect(verify?.headers.get('cookie')).toBe('SESSION=abc; GARMIN-SSO=1');
+    expect(verify?.headers.get('cookie')).toBe('SESSION=abc; __cf_bm=cf; GARMIN-SSO=1');
     expect(JSON.parse(verify?.body ?? '')).toMatchObject({
       mfaMethod: 'sms',
       mfaVerificationCode: '123456',
@@ -165,7 +202,7 @@ describe('MFA', () => {
   });
 
   it('can resume from another instance with the returned state', async () => {
-    const garmin = new FakeGarmin()
+    const garmin = signedInGarmin()
       .on('POST', SSO_LOGIN, mfaRequired())
       .on('POST', SSO_MFA, successfulLogin())
       .on('POST', DI_TOKEN, tokenResponse());
@@ -178,7 +215,7 @@ describe('MFA', () => {
   });
 
   it('keeps the pending login after a wrong code', async () => {
-    const garmin = new FakeGarmin()
+    const garmin = signedInGarmin()
       .on('POST', SSO_LOGIN, mfaRequired())
       .on(
         'POST',

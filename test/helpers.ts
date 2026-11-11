@@ -129,7 +129,24 @@ export function client(
   });
 }
 
+export const SSO_SIGN_IN = '/mobile/sso/en_US/sign-in';
 export const SSO_LOGIN = '/mobile/api/login';
 export const SSO_MFA = '/mobile/api/mfa/verifyCode';
 export const DI_TOKEN = '/di-oauth2-service/oauth/token';
 export const PROFILE = '/userprofile-service/socialProfile';
+
+/** A Garmin whose sign-in page answers and sets the session cookies, as the real one does. */
+export function signedInGarmin(): FakeGarmin {
+  return new FakeGarmin().on(
+    'GET',
+    SSO_SIGN_IN,
+    new Response('<html><title>Sign in</title></html>', {
+      status: 200,
+      headers: [
+        ['content-type', 'text/html'],
+        ['set-cookie', 'SESSION=page; Path=/; Secure; HttpOnly'],
+        ['set-cookie', '__cf_bm=cf; Path=/; Secure'],
+      ],
+    }),
+  );
+}
